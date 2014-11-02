@@ -16,6 +16,8 @@
 #endif
 #include "threads/malloc.h"
 #include "filesys/file.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -102,8 +104,9 @@ thread_init (void)
   list_init (&all_list);
 lock_init(&load_lock);
 lock_init(&open_lock);
-lock_init(&exec_lock);
+lock_init(&file_lock);
 sema_init(&sema3, 0);
+	frame_init();
 //	list_init (&open_exe);
 
   /* Set up a thread structure for the running thread. */

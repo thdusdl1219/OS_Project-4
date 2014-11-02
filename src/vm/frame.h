@@ -9,7 +9,7 @@ struct frame_elem
 	void* frame;
 };
 void frame_init(void);
-void* frame_allocate(struct thread* thd);
-void frame_deallocate(struct thread* thd);
+void* frame_allocate(void);
+void frame_deallocate(void* frame);
 void* choose_victim(void);
-void* find_frame(struct thread* thd);
+struct frame_elem* find_frame(void);

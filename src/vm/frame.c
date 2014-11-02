@@ -3,6 +3,7 @@
 #include <debug.h>
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "threads/thread.h"
 struct list frame_list;
 
 static bool
@@ -12,34 +13,40 @@ thread_same(const struct list_elem *a_, const struct list_elem *b_ UNUSED, void 
 	return a->cur_thread == aux;
 }
 
+static bool
+frame_same(const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
+{
+	const struct frame_elem *a = list_entry(a_, struct frame_elem, elem);
+	return a->frame == aux;
+}
+
 void frame_init()
 {
 	list_init(&frame_list);
 	lock_init(&frame_lock);
 }
 
-void* frame_allocate(struct thread* thd)
+void* frame_allocate()
 {
 	void* frame;
-	struct frame_elem* fte;
-	fte = malloc(sizeof(*fte));
+	struct frame_elem* fte = malloc(sizeof(struct frame_elem));
 	
 	frame = palloc_get_page(PAL_USER);
 	if(frame == NULL)
 		frame = choose_victim();
 	
-	fte->cur_thread = thd;
+	fte->cur_thread = thread_current();
 	fte->frame = frame;
 	list_push_back(&frame_list, &fte->elem);
 	return frame;
 
 }
-void frame_deallocate(struct thread* thd)
+void frame_deallocate(void* frame)
 {
 	struct frame_elem* t;
 	while(1)
 	{
-		t = list_entry(list_find(&frame_list, thread_same, (void *)thd), struct frame_elem, elem);
+		t = list_entry(list_find(&frame_list, frame_same, frame), struct frame_elem, elem);
 		if(t == NULL)
 			return;
 		else
@@ -56,12 +63,12 @@ void* choose_victim()
 }
 
 
-void* find_frame(struct thread* thd)
+struct frame_elem* find_frame()
 {
 	struct frame_elem* t;
-	t = list_entry(list_find(&frame_list, thread_same, (void *)thd), struct frame_elem, elem);
+	t = list_entry(list_find(&frame_list, thread_same, (void *)thread_current()), struct frame_elem, elem);
 	if(t == NULL)
 		return NULL;
 	else
-		return t->frame;
+		return t;
 }

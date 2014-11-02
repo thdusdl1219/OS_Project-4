@@ -12,9 +12,12 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 #include "threads/synch.h"
+#include "vm/page.h"
+
 static void syscall_handler (struct intr_frame *);
 static bool fd_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux);
-
+void check_pointer(const void* ptr);
+void check_string(const void* str);
 struct lock open_lock;
 
 char zz[256];
@@ -31,6 +34,44 @@ fd_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *au
 		return a ->file_d == *(int *)aux;
 }
 
+void check_pointer(const void* ptr)
+{
+	if(!is_user_vaddr((const void *)ptr) || ptr < (void *) 0x08048000)
+	{
+		thread_current() ->exit_status = -1;
+		thread_exit();
+	}
+//	struct sup_page_elem *spe = get_page_elem((void *)ptr);
+//	if(spe == NULL)
+//	{
+//		thread_current() -> exit_status = -1;
+//		thread_exit();
+//	}
+}
+
+void check_string(const void* str)
+{
+//	printf("string : %s\n",str);
+//	PANIC("address : %x\n",str);
+
+	check_pointer(str);
+	while(* (char *) str != 0)
+	{
+		str = (char *) str + 1;
+		check_pointer(str);
+	}
+}
+
+void check_buffer(void* buffer, unsigned size)
+{
+	unsigned i;
+	char* buf = (char *) buffer;
+	for(i = 0; i < size ; i++)
+	{
+		check_pointer((const void*)buf);
+		buf++;
+	}
+}
 static void
 syscall_handler (struct intr_frame *f) 
 {
@@ -38,6 +79,9 @@ syscall_handler (struct intr_frame *f)
 	bool bool_;
 	struct open_elem* t;
 	struct file* open_file;
+	
+	check_pointer((const void*) f->esp);
+	
 	switch(*(int*)(f->esp))
 	{
 		case SYS_HALT:
@@ -71,6 +115,7 @@ syscall_handler (struct intr_frame *f)
 			}
 			else
 			{
+				check_string((const void*)(*(char **)(f->esp + 16)));
 				lock_acquire(&open_lock);
 				bool_ = filesys_create(*(char **)(f->esp + 16), *(unsigned int*)(f->esp + 20));
 				lock_release(&open_lock);
@@ -83,6 +128,7 @@ syscall_handler (struct intr_frame *f)
 				thread_current ()->exit_status = -1;
 				thread_exit();
 			}
+				check_string((const void*)(*(char **)(f->esp+4)));
 				lock_acquire(&open_lock);
 				f->eax = filesys_remove(*(char **)(f->esp + 4));
 				lock_release(&open_lock);
@@ -93,6 +139,7 @@ syscall_handler (struct intr_frame *f)
 				thread_current () -> exit_status = -1;
 				thread_exit();
 			}
+			check_string((const void*)(*(char **)(f->esp+4)));
 			lock_acquire(&open_lock);
 			open_file = filesys_open(*(char **)(f->esp + 4));
 			lock_release(&open_lock);
@@ -128,6 +175,7 @@ syscall_handler (struct intr_frame *f)
 			}
 			else
 			{
+//				check_buffer(*(void **)(f->esp+24), *(unsigned *)(f->esp + 28));
 				t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 20)), struct open_elem, elem);
 				lock_acquire(&open_lock);
 				f->eax = file_read (t->open_file, *(void **)(f->esp + 24), *(int32_t *)(f->esp + 28));	
