@@ -44,9 +44,25 @@ void sup_page_destroy(struct hash* sup)
 	hash_destroy(sup, destruct_func);
 }
 
+bool remove_page_table_unmmap(uint8_t* addr)
+{
+	struct sup_page_elem *spe = NULL;
+	spe = get_page_elem(addr);
+	if(spe == NULL)
+		return false;
+	if(spe->load = true)
+		frame_deallocate(addr);
+	hash_delete(&thread_current()->sup, &spe->elem);
+	free(spe);	
+}
+
 bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable)
 {
-	struct sup_page_elem *spe = malloc(sizeof(struct sup_page_elem));
+	struct sup_page_elem *spe = NULL;
+	spe = get_page_elem(upage);
+	if(spe != NULL)
+		return false;
+	spe = malloc(sizeof(struct sup_page_elem));
 	if(spe == NULL)
 		return false;
 	spe->file = file;
@@ -59,7 +75,13 @@ bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, 
 
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
+/*
+bool add_to_page_table_mmap(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable)
+{
+	struct sup_page_elem *spe = get_page_elem(upage);
+	if(spe != NULL)
 
+}*/
 bool add_to_page_table_in_stack(uint8_t* addr)
 {
 	struct sup_page_elem *spe = malloc(sizeof(struct sup_page_elem));
@@ -104,7 +126,7 @@ bool load_lazy_page(struct sup_page_elem* spe)
 		lock_acquire(&file_lock);
 		if(file_read_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
 		{
-			lock_release(&open_lock);
+			lock_release(&file_lock);
 			frame_deallocate(frame);
 			return false;
 		}

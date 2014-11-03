@@ -20,7 +20,7 @@ struct sup_page_elem* get_page_elem(void* addr);
 
 bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable);
 bool add_to_page_table_in_stack(uint8_t* addr);
-
+bool remove_page_table_unmmap(uint8_t* addr);
 
 bool load_stack_page(struct sup_page_elem* spe);
 bool load_lazy_page(struct sup_page_elem* spe);
