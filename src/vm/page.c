@@ -60,6 +60,38 @@ bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, 
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
 
+bool add_to_page_table_in_stack(uint8_t* addr)
+{
+	struct sup_page_elem *spe = malloc(sizeof(struct sup_page_elem));
+	if(spe == NULL)
+		return false;
+	spe->file = NULL;
+	spe->read_bytes = 0;
+	spe->zero_bytes = 0;
+	spe->uaddr = pg_round_down(addr);
+	spe->offset = 0;
+	spe->writable = true;
+	spe->load = false;
+
+	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
+}
+
+bool load_stack_page(struct sup_page_elem* spe)
+{
+	if(spe->load)
+		return false;
+	uint8_t *frame = frame_allocate();
+	if(frame == NULL)
+		return false;
+	if(!install_page (spe->uaddr, frame, spe->writable))
+	{
+		frame_deallocate(frame);
+		return false;
+	}
+	spe->load = true;
+	return true;
+}
+
 bool load_lazy_page(struct sup_page_elem* spe)
 {
 	if(spe->load)
