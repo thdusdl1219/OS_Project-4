@@ -44,16 +44,26 @@ void sup_page_destroy(struct hash* sup)
 	hash_destroy(sup, destruct_func);
 }
 
+void change_page_table_close(uint8_t* addr)
+{
+	struct sup_page_elem *spe = NULL;
+	spe = get_page_elem(addr);
+	if(spe == NULL)
+		return;
+	load_lazy_page(spe);
+}
+
 bool remove_page_table_unmmap(uint8_t* addr)
 {
 	struct sup_page_elem *spe = NULL;
 	spe = get_page_elem(addr);
 	if(spe == NULL)
 		return false;
-	if(spe->load = true)
+	if(spe->load == true)
 		frame_deallocate(addr);
 	hash_delete(&thread_current()->sup, &spe->elem);
-	free(spe);	
+	free(spe);
+	return true;
 }
 
 bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable)
