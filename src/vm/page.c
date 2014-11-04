@@ -4,11 +4,13 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include <string.h>
 
 struct lock file_lock;
+struct lock open_lock;
 static unsigned 
 hash_func (const struct hash_elem *a, void *aux UNUSED)
 {
@@ -31,6 +33,11 @@ static void
 destruct_func(struct hash_elem *a, void *aux UNUSED)
 {
 	struct sup_page_elem *spe = hash_entry(a, struct sup_page_elem, elem);
+	if(spe->load)
+	{
+		frame_deallocate(pagedir_get_page(thread_current()->pagedir, spe->uaddr));
+		pagedir_clear_page(thread_current()->pagedir, spe->uaddr);
+	}
 	free(spe);
 }
 
@@ -60,7 +67,22 @@ bool remove_page_table_unmmap(uint8_t* addr)
 	if(spe == NULL)
 		return false;
 	if(spe->load == true)
+	{
+		void* frame = pagedir_get_page(thread_current()->pagedir, spe->uaddr);
+		if(pagedir_is_dirty(thread_current()->pagedir, spe->uaddr))
+		{
+			lock_acquire(&open_lock);
+			if(file_write_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
+			{
+				lock_release(&open_lock);
+				return false;
+			}
+			lock_release(&open_lock);
+		
+		}
 		frame_deallocate(addr);
+		pagedir_clear_page(thread_current()->pagedir, spe->uaddr);
+	}
 	hash_delete(&thread_current()->sup, &spe->elem);
 	free(spe);
 	return true;
@@ -133,14 +155,14 @@ bool load_lazy_page(struct sup_page_elem* spe)
 		return false;
 	if(spe->read_bytes > 0)
 	{
-		lock_acquire(&file_lock);
+		lock_acquire(&open_lock);
 		if(file_read_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
 		{
-			lock_release(&file_lock);
+			lock_release(&open_lock);
 			frame_deallocate(frame);
 			return false;
 		}
-		lock_release(&file_lock);
+		lock_release(&open_lock);
 		memset(frame + spe->read_bytes, 0, spe->zero_bytes);
 	}
 
