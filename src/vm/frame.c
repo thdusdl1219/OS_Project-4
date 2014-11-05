@@ -98,6 +98,11 @@ void* choose_victim()
 			spe->load = false;
 			return palloc_get_page(PAL_USER);
 		}
+		e = list_next(e);
+		if(e == list_end(&frame_list))
+		{
+			e = list_begin(&frame_list);
+		}
 	}
 	PANIC("I don't have more frame");
 }
