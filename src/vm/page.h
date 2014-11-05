@@ -14,9 +14,11 @@ struct sup_page_elem
 	size_t zero_bytes;
 	off_t offset;
 	bool writable;
+	bool mmap;
 
 	size_t swap_index;
 	bool swap;
+	bool reswap;
 
 	uint8_t* uaddr;
 };
@@ -25,7 +27,7 @@ void sup_page_destroy(struct hash* sup);
 struct sup_page_elem* get_page_elem(void* addr);
 
 void change_page_table_close(uint8_t* addr);
-bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable);
+bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable, bool mmap);
 bool add_to_page_table_in_stack(uint8_t* addr);
 bool remove_page_table_unmmap(uint8_t* addr);
 

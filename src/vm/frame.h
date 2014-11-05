@@ -10,6 +10,7 @@ struct frame_elem
 	struct list_elem elem;
 	struct thread* cur_thread;
 	void* frame;
+	void* uaddr;
 };
 void frame_init(void);
 void* frame_allocate(uint8_t* uaddr);

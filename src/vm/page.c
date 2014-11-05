@@ -8,6 +8,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include <string.h>
+#include "swap.h"
 
 struct lock file_lock;
 struct lock open_lock;
@@ -88,7 +89,7 @@ bool remove_page_table_unmmap(uint8_t* addr)
 	return true;
 }
 
-bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable)
+bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable, bool mmap)
 {
 	struct sup_page_elem *spe = NULL;
 	spe = get_page_elem(upage);
@@ -106,16 +107,10 @@ bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, 
 	spe->load = false;
 	spe->swap_index = -1;
 	spe->swap = false;
-
+	spe->reswap = false;
+	spe->mmap = mmap;
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
-/*
-bool add_to_page_table_mmap(struct file* file, size_t read_bytes, size_t zero_bytes, uint8_t* upage, off_t ofs, bool writable)
-{
-	struct sup_page_elem *spe = get_page_elem(upage);
-	if(spe != NULL)
-
-}*/
 bool add_to_page_table_in_stack(uint8_t* addr)
 {
 	struct sup_page_elem *spe = malloc(sizeof(struct sup_page_elem));
@@ -130,6 +125,8 @@ bool add_to_page_table_in_stack(uint8_t* addr)
 	spe->load = false;
 	spe->swap_index = -1;
 	spe->swap = false;
+	spe->reswap = false;
+	spe->mmap = false;
 
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
@@ -141,6 +138,12 @@ bool load_stack_page(struct sup_page_elem* spe)
 	uint8_t *frame = frame_allocate(spe->uaddr);
 	if(frame == NULL)
 		return false;
+	if(spe->swap)
+	{
+		swap_in(spe->swap_index, frame);
+		spe->swap = false;
+	}
+
 	if(!install_page (spe->uaddr, frame, spe->writable))
 	{
 		frame_deallocate(frame);
@@ -157,17 +160,25 @@ bool load_lazy_page(struct sup_page_elem* spe)
 	uint8_t *frame = frame_allocate(spe->uaddr);
 	if(frame == NULL)
 		return false;
-	if(spe->read_bytes > 0)
+	if(spe->swap)
 	{
-		lock_acquire(&open_lock);
-		if(file_read_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
+		swap_in(spe->swap_index, frame);
+		spe->swap = false;
+	}
+	else
+	{
+		if(spe->read_bytes > 0)
 		{
+			lock_acquire(&open_lock);
+			if(file_read_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
+			{
+				lock_release(&open_lock);
+				frame_deallocate(frame);
+				return false;
+			}
 			lock_release(&open_lock);
-			frame_deallocate(frame);
-			return false;
+			memset(frame + spe->read_bytes, 0, spe->zero_bytes);
 		}
-		lock_release(&open_lock);
-		memset(frame + spe->read_bytes, 0, spe->zero_bytes);
 	}
 
 	if(!install_page (spe->uaddr, frame, spe->writable))

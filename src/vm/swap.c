@@ -1,6 +1,6 @@
 #include "swap.h"
 #include <stdio.h>
-
+#include "userprog/syscall.h"
 void swap_init()
 {
 	swap_block = block_get_role(BLOCK_SWAP);
@@ -11,6 +11,7 @@ void swap_init()
 	if(swap_table == NULL)
 		return;
 	bitmap_set_all (swap_table, false);
+	lock_init(&block_lock);
 }
 
 size_t swap_out(void* frame)
@@ -31,6 +32,7 @@ size_t swap_out(void* frame)
 
 void swap_in(size_t index, void* frame)
 {
+	lock_acquire(&block_lock);
 	if( bitmap_test(swap_table, index) == false )
 		PANIC("[Warning] It is free swap slot.");
 
@@ -41,4 +43,5 @@ void swap_in(size_t index, void* frame)
 	{
 		block_read(swap_block, index * 8 + i, frame + i * BLOCK_SECTOR_SIZE);
 	}
+	lock_release(&block_lock);
 }
