@@ -33,7 +33,18 @@ fd_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *au
 	  const struct open_elem *a = list_entry(a_, struct open_elem, elem);
 		return a ->file_d == *(int *)aux;
 }
-
+static bool
+mmapid_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
+{
+	  const struct mmap_elem *a = list_entry(a_, struct mmap_elem, elem);
+		return a ->mmapid == (int)aux;
+}
+static bool
+file_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
+{
+	  const struct mmap_elem *a = list_entry(a_, struct mmap_elem, elem);
+		return a ->file == (struct file *)aux;
+}
 void check_pointer(const void* ptr)
 {
 	if(!is_user_vaddr((const void *)ptr) || ptr < (void *) 0x08048000)
@@ -69,6 +80,10 @@ void check_buffer(void* buffer, unsigned size)
 	for(i = 0; i < size ; i++)
 	{
 		check_pointer((const void*)buf);
+		struct sup_page_elem* spe = get_page_elem(buffer);
+		if(spe != NULL)
+			load_lazy_page(spe);
+
 		buf++;
 	}
 }
@@ -115,7 +130,7 @@ syscall_handler (struct intr_frame *f)
 			}
 			else
 			{
-				check_string((const void*)(*(char **)(f->esp + 16)));
+				check_pointer((const void*)(*(char **)(f->esp + 16)));
 				lock_acquire(&open_lock);
 				bool_ = filesys_create(*(char **)(f->esp + 16), *(unsigned int*)(f->esp + 20));
 				lock_release(&open_lock);
@@ -128,7 +143,7 @@ syscall_handler (struct intr_frame *f)
 				thread_current ()->exit_status = -1;
 				thread_exit();
 			}
-				check_string((const void*)(*(char **)(f->esp+4)));
+				check_pointer((const void*)(*(char **)(f->esp+4)));
 				lock_acquire(&open_lock);
 				f->eax = filesys_remove(*(char **)(f->esp + 4));
 				lock_release(&open_lock);
@@ -139,7 +154,7 @@ syscall_handler (struct intr_frame *f)
 				thread_current () -> exit_status = -1;
 				thread_exit();
 			}
-			check_string((const void*)(*(char **)(f->esp+4)));
+			check_pointer((const void*)(*(char **)(f->esp+4)));
 			lock_acquire(&open_lock);
 			open_file = filesys_open(*(char **)(f->esp + 4));
 			lock_release(&open_lock);
@@ -175,7 +190,7 @@ syscall_handler (struct intr_frame *f)
 			}
 			else
 			{
-//				check_buffer(*(void **)(f->esp+24), *(unsigned *)(f->esp + 28));
+				check_buffer(*(void **)(f->esp+24), *(unsigned *)(f->esp + 28));
 				t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 20)), struct open_elem, elem);
 				lock_acquire(&open_lock);
 				f->eax = file_read (t->open_file, *(void **)(f->esp + 24), *(int32_t *)(f->esp + 28));	
@@ -189,6 +204,7 @@ syscall_handler (struct intr_frame *f)
 			}
 			else
 			{
+				check_buffer(*(void **)(f->esp+24), *(unsigned *)(f->esp + 28));
 				t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 20)), struct open_elem, elem);
 				lock_acquire(&open_lock);
 				f->eax = file_write (t->open_file, *(void **)(f->esp + 24), *(int32_t *)(f->esp + 28));
@@ -224,14 +240,101 @@ syscall_handler (struct intr_frame *f)
 				thread_current ()-> exit_status = -1;
 				thread_exit();
 			}
+			close_file_mmap(t->open_file);
 			lock_acquire(&open_lock);
 			file_close(t->open_file);
 			lock_release(&open_lock);
 			list_remove(list_find(&thread_current()->open_list, fd_same, (f->esp + 4)));
 			free(t);
 			break;
+		case SYS_MMAP:
+			if(*(int *)(f->esp + 16) == 0 || *(int *)(f->esp + 16) == 1)
+			{
+				f->eax = -1;
+				break;
+			}
+			if(!is_user_vaddr(*(const void**)(f->esp + 20)) || *(unsigned *) (f->esp + 20) < 0x08048000 || (*(unsigned *)(f->esp + 20) & 0xfff) != 0)
+			{
+				f->eax = -1;
+				break;
+			}
+			if(*(unsigned *)(f->esp + 20) < 0xc0000000 && *(unsigned *)(f->esp + 20) > 0xc0000000 - (1 << 23))
+			{
+				f->eax = -1;
+				break;
+			}
+			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 16)), struct open_elem, elem);
+			if(t == NULL || file_length(t->open_file) == 0)
+			{
+				f->eax = -1;
+				break;
+			}
+			int size = file_length(t->open_file);
+			unsigned buf = *(unsigned *)(f->esp + 20);
+			int check = 0;
+			for(; size > 0; size = size -0x1000)
+			{
+				struct sup_page_elem *spe = get_page_elem((void *)buf);
+				if(spe != NULL)
+				{
+					f->eax = -1;
+					check = 1;
+					break;
+				}
+				buf = buf + 0x1000;
+			}
+			if(check == 1)
+				break;
+			size = file_length(t->open_file);
+			void* buffer = *(void **)(f->esp + 20);
+			off_t ofs = 0;
+			thread_current()->mmapid++;
+			for(; size > 0; size = size - 0x1000)
+			{
+				size_t read_bytes = size < 0x1000 ? size : 0x1000;
+				size_t zero_bytes = 0x1000 - read_bytes;
+				
+				add_to_page_table(t->open_file, read_bytes, zero_bytes,	buffer, ofs, true, true);
+				struct mmap_elem *e = malloc(sizeof(struct mmap_elem));
+				e->mmapid = thread_current()->mmapid;
+				e->file = t->open_file;
+				e->uaddr = buffer;
+				list_push_back(&thread_current()->mmap_list, &e->elem);
+				ofs = ofs + 0x1000;
+				buffer = buffer + 0x1000;
+
+		}
+			f->eax = thread_current()->mmapid;
+			break;
+		case SYS_MUNMAP:
+			munmap(*(int *)(f->esp + 4));
+			break;
 //		default:
 //			printf ("system call!\n");
 //			break;
 	}
+}
+void munmap(int mapping)
+{
+	while(1)
+	{
+		struct list_elem* e = list_find(&thread_current()->mmap_list, mmapid_same, (void *)mapping);
+		if(e == NULL)
+			return;
+		struct mmap_elem* me = list_entry(e, struct mmap_elem, elem);
+		remove_page_table_unmmap(me->uaddr);
+		list_remove(e);
+		free(me);
+	}	
+}
+void close_file_mmap(struct file* file)
+{	
+
+		struct list_elem* e;
+		for(e = list_begin (&thread_current ()->mmap_list); e != list_end(&thread_current()->mmap_list); e = list_next(e))
+		{
+		struct mmap_elem* me = list_entry(e, struct mmap_elem, elem);
+		if(me->file == file)
+			change_page_table_close(me->uaddr);
+		}
 }

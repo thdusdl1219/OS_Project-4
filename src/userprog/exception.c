@@ -150,10 +150,26 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 	bool load = false;
+	unsigned base = 0xbffff000;
+	unsigned addr = (unsigned ) f->esp;
 	if(not_present && fault_addr > (void *)0x08048000 && is_user_vaddr(fault_addr))
 	{
 		struct sup_page_elem *spe = get_page_elem(fault_addr);
-		load = load_lazy_page(spe);
+		if(spe != NULL)
+			load = load_lazy_page(spe);
+		else if(addr <= base && addr > 0xc0000000 - (1 << 23))
+		{
+			for(; addr <= base; base = base - 0x1000)
+				add_to_page_table_in_stack((uint8_t*)(base - 0x1000));
+			spe = get_page_elem(fault_addr);
+			if(spe != NULL)
+				load = load_stack_page(spe);
+		}
+		else
+		{
+			thread_current()->exit_status = -1;
+			thread_exit();
+		}
 	}
 	else
 	{

@@ -227,6 +227,15 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
 
+	struct list_elem* e = list_begin(&thread_current()->mmap_list);
+	while(!list_empty(&thread_current()->mmap_list))
+	{
+		struct mmap_elem* me = list_entry(e, struct mmap_elem, elem);
+		remove_page_table_unmmap(me->uaddr);
+		e = list_remove(e);
+		free(me);
+	}
+
 	sup_page_destroy(&thread_current()->sup);
   pd = cur->pagedir;
   if (pd != NULL) 
@@ -522,7 +531,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 			
-			if(!add_to_page_table(file, page_read_bytes, page_zero_bytes, upage, ofs, writable))
+			if(!add_to_page_table(file, page_read_bytes, page_zero_bytes, upage, ofs, writable,false))
 				return false;
       /* Get a page of memory. */
 //      uint8_t *kpage = palloc_get_page(PAL_USER);

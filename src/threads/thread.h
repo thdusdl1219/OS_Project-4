@@ -108,7 +108,16 @@ struct thread
 		struct thread* parents;
 		struct file* file;
 		struct hash sup;
+		struct list mmap_list;
+		int mmapid;
   };
+struct mmap_elem
+{
+	struct list_elem elem;
+	uint8_t* uaddr;
+	struct file* file;
+	int mmapid;
+};
 struct open_elem
 	{
 		struct list_elem elem;
