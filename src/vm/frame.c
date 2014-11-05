@@ -26,7 +26,7 @@ void frame_init()
 	lock_init(&frame_lock);
 }
 
-void* frame_allocate()
+void* frame_allocate(uint8_t* uaddr)
 {
 	void* frame;
 	struct frame_elem* fte = malloc(sizeof(struct frame_elem));
@@ -59,6 +59,7 @@ void frame_deallocate(void* frame)
 }
 void* choose_victim()
 {
+	
 	PANIC("I don't have more frame");
 }
 

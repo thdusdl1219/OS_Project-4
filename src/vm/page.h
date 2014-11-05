@@ -1,3 +1,6 @@
+#ifndef PAGEH
+#define PAGEH
+
 #include <hash.h>
 #include "filesys/file.h"
 
@@ -12,6 +15,9 @@ struct sup_page_elem
 	off_t offset;
 	bool writable;
 
+	size_t swap_index;
+	bool swap;
+
 	uint8_t* uaddr;
 };
 void sup_page_init(struct hash* sup);
@@ -25,3 +31,5 @@ bool remove_page_table_unmmap(uint8_t* addr);
 
 bool load_stack_page(struct sup_page_elem* spe);
 bool load_lazy_page(struct sup_page_elem* spe);
+
+#endif

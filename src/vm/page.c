@@ -104,6 +104,8 @@ bool add_to_page_table(struct file* file, size_t read_bytes, size_t zero_bytes, 
 	spe->offset = ofs;
 	spe->writable = writable;
 	spe->load = false;
+	spe->swap_index = -1;
+	spe->swap = false;
 
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
@@ -126,6 +128,8 @@ bool add_to_page_table_in_stack(uint8_t* addr)
 	spe->offset = 0;
 	spe->writable = true;
 	spe->load = false;
+	spe->swap_index = -1;
+	spe->swap = false;
 
 	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
 }
@@ -134,7 +138,7 @@ bool load_stack_page(struct sup_page_elem* spe)
 {
 	if(spe->load)
 		return false;
-	uint8_t *frame = frame_allocate();
+	uint8_t *frame = frame_allocate(spe->uaddr);
 	if(frame == NULL)
 		return false;
 	if(!install_page (spe->uaddr, frame, spe->writable))
@@ -150,7 +154,7 @@ bool load_lazy_page(struct sup_page_elem* spe)
 {
 	if(spe->load)
 		return false;
-	uint8_t *frame = frame_allocate();
+	uint8_t *frame = frame_allocate(spe->uaddr);
 	if(frame == NULL)
 		return false;
 	if(spe->read_bytes > 0)
