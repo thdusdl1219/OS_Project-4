@@ -79,6 +79,7 @@ void* choose_victim()
 	{
 		struct frame_elem *fe = list_entry(e, struct frame_elem, elem);
 		struct thread *t = fe->cur_thread;
+		void* frame;
 		if(t->pagedir != NULL)
 		{
 		if(pagedir_is_accessed(t->pagedir, fe->spe->uaddr))
@@ -104,12 +105,13 @@ void* choose_victim()
 			}
 
 			pagedir_clear_page(t->pagedir, fe->spe->uaddr);
-			palloc_free_page(fe->frame);
+//			palloc_free_page(fe->frame);
 			list_remove(&fe->elem);
 			fe->spe->load = false;
+			frame = fe->frame;
 			lock_release(fe->spe->lock);
 			free(fe);
-			return palloc_get_page(PAL_USER);
+			return frame;
 		}
 		}
 		e = list_next(e);
