@@ -3,7 +3,7 @@
 
 #include <hash.h>
 #include "filesys/file.h"
-
+#include "threads/synch.h"
 struct sup_page_elem
 {
 	struct hash_elem elem;
@@ -21,6 +21,7 @@ struct sup_page_elem
 	bool reswap;
 
 	uint8_t* uaddr;
+	struct lock* lock;
 };
 void sup_page_init(struct hash* sup);
 void sup_page_destroy(struct hash* sup);

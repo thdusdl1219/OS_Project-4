@@ -1,0 +1,74 @@
+../vm/frame.c:		if(pagedir_is_accessed(t->pagedir, fe->spe->uaddr))
+../vm/frame.c:			pagedir_set_accessed(t->pagedir, fe->spe->uaddr, false);
+../vm/frame.c:			lock_acquire(fe->spe->lock);
+../vm/frame.c:			if(pagedir_is_dirty(t->pagedir, fe->spe->uaddr) || fe->spe->reswap)
+../vm/frame.c:				if(fe->spe->mmap)
+../vm/frame.c:					file_write_at(fe->spe->file, fe->frame, fe->spe->read_bytes, fe->spe->offset);
+../vm/frame.c:					fe->spe->reswap = true;
+../vm/frame.c:					fe->spe->swap = true;
+../vm/frame.c:					fe->spe->swap_index = swap_out(fe->frame);
+../vm/frame.c:			pagedir_clear_page(t->pagedir, fe->spe->uaddr);
+../vm/frame.c:			fe->spe->load = false;
+../vm/frame.c:			lock_release(fe->spe->lock);
+../vm/page.c:	return hash_int((int) spe->uaddr);
+../vm/page.c:	if(spe->load)
+../vm/page.c:		frame_deallocate(pagedir_get_page(thread_current()->pagedir, spe->uaddr));
+../vm/page.c:		pagedir_clear_page(thread_current()->pagedir, spe->uaddr);
+../vm/page.c:	if(spe->load == true)
+../vm/page.c:		void* frame = pagedir_get_page(thread_current()->pagedir, spe->uaddr);
+../vm/page.c:		if(pagedir_is_dirty(thread_current()->pagedir, spe->uaddr))
+../vm/page.c:			if(file_write_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
+../vm/page.c:		pagedir_clear_page(thread_current()->pagedir, spe->uaddr);
+../vm/page.c:	hash_delete(&thread_current()->sup, &spe->elem);
+../vm/page.c:	spe->file = file;
+../vm/page.c:	spe->read_bytes = read_bytes;
+../vm/page.c:	spe->zero_bytes = zero_bytes;
+../vm/page.c:	spe->uaddr = upage;
+../vm/page.c:	spe->offset = ofs;
+../vm/page.c:	spe->writable = writable;
+../vm/page.c:	spe->lock = l;
+../vm/page.c:	spe->load = false;
+../vm/page.c:	spe->swap_index = -1;
+../vm/page.c:	spe->swap = false;
+../vm/page.c:	spe->reswap = false;
+../vm/page.c:	spe->mmap = mmap;
+../vm/page.c:	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
+../vm/page.c:	spe->file = NULL;
+../vm/page.c:	spe->read_bytes = 0;
+../vm/page.c:	spe->zero_bytes = 0;
+../vm/page.c:	spe->uaddr = pg_round_down(addr);
+../vm/page.c:	spe->offset = 0;
+../vm/page.c:	spe->writable = true;
+../vm/page.c:	spe->lock = l;
+../vm/page.c:	spe->load = false;
+../vm/page.c:	spe->swap_index = -1;
+../vm/page.c:	spe->swap = false;
+../vm/page.c:	spe->reswap = false;
+../vm/page.c:	spe->mmap = false;
+../vm/page.c:	return(hash_insert(&thread_current()->sup, &spe->elem) == NULL);
+../vm/page.c:	lock_acquire(spe->lock);
+../vm/page.c:	if(spe->load)
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:	if(spe->swap)
+../vm/page.c:		swap_in(spe->swap_index, frame);
+../vm/page.c:		spe->swap = false;
+../vm/page.c:	if(!install_page (spe->uaddr, frame, spe->writable))
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:	spe->load = true;
+../vm/page.c:	lock_release(spe->lock);
+../vm/page.c:	lock_acquire(spe->lock);
+../vm/page.c:	if(spe->load)
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:	if(spe->swap)
+../vm/page.c:		swap_in(spe->swap_index, frame);
+../vm/page.c:		spe->swap = false;
+../vm/page.c:		if(spe->read_bytes > 0)
+../vm/page.c:			if(file_read_at(spe->file, frame, spe->read_bytes, spe->offset) != (int) spe->read_bytes)
+../vm/page.c:				lock_release(spe->lock);
+../vm/page.c:			memset(frame + spe->read_bytes, 0, spe->zero_bytes);
+../vm/page.c:	if(!install_page (spe->uaddr, frame, spe->writable))
+../vm/page.c:		lock_release(spe->lock);
+../vm/page.c:	spe->load = true;
+../vm/page.c:	lock_release(spe->lock);

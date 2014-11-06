@@ -94,7 +94,7 @@ start_process (void *file_name_)
 	char *token;
 /*	sema_down(&sema2); */
 
-	lock_acquire(&load_lock);
+	lock_acquire(&open_lock);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -159,7 +159,7 @@ start_process (void *file_name_)
 	if_.ebp = (int)if_.esp;
 
 
-	lock_release(&load_lock);
+	lock_release(&open_lock);
 	sema_up(&sema3);
 //	lock_acquire(&exec_lock);
 //	lock_release(&exec_lock);
@@ -420,6 +420,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = page_offset + phdr.p_filesz;
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
+
                 }
               else 
                 {
@@ -430,7 +431,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
+							{
                 goto done;
+							}
             }
           else
             goto done;
@@ -440,10 +443,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Set up stack. */
   if (!setup_stack (esp))
+	{
+
     goto done;
+	}
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
+
   success = true;
 
  done:
@@ -570,18 +577,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
+ // uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE;
-      else
-        palloc_free_page (kpage);
-    }
+  add_to_page_table_in_stack (((uint8_t *) PHYS_BASE) - PGSIZE);
+	struct sup_page_elem *spe = get_page_elem(((uint8_t *)PHYS_BASE) - PGSIZE);
+	success = load_stack_page(spe);
+
+	*esp = PHYS_BASE;
+
   return success;
 }
 

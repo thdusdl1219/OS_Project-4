@@ -4,7 +4,6 @@
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
-#include "page.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "swap.h"
@@ -12,10 +11,10 @@ struct lock open_lock;
 struct list frame_list;
 
 static bool
-thread_same(const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
+spe_same(const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
 {
 	const struct frame_elem *a = list_entry(a_, struct frame_elem, elem);
-	return a->cur_thread == aux;
+	return a->spe == (struct sup_page_elem* )aux;
 }
 
 static bool
@@ -31,30 +30,39 @@ void frame_init()
 	lock_init(&frame_lock);
 }
 
-void* frame_allocate(uint8_t* uaddr)
+void* frame_allocate(struct sup_page_elem* spe)
 {
 	void* frame;
 	struct frame_elem* fte = malloc(sizeof(struct frame_elem));
 	
 	frame = palloc_get_page(PAL_USER);
 	if(frame == NULL)
+	{
 		frame = choose_victim();
+		lock_release(&frame_lock);
+	}
 	
 	fte->cur_thread = thread_current();
 	fte->frame = frame;
-	fte->uaddr = uaddr;
+	fte->spe = spe;
+	lock_acquire(&frame_lock);
 	list_push_back(&frame_list, &fte->elem);
+	lock_release(&frame_lock);
 	return frame;
 
 }
 void frame_deallocate(void* frame)
 {
 	struct frame_elem* t;
+	lock_acquire(&frame_lock);
 	while(1)
 	{
 		t = list_entry(list_find(&frame_list, frame_same, frame), struct frame_elem, elem);
 		if(t == NULL)
+		{
+			lock_release(&frame_lock);
 			return;
+		}
 		else
 		{
 			palloc_free_page(t->frame);
@@ -65,38 +73,44 @@ void frame_deallocate(void* frame)
 }
 void* choose_victim()
 {
+	lock_acquire(&frame_lock);
 	struct list_elem* e = list_begin(&frame_list);
 	while(1)
 	{
 		struct frame_elem *fe = list_entry(e, struct frame_elem, elem);
 		struct thread *t = fe->cur_thread;
-		if(pagedir_is_accessed(t->pagedir, fe->uaddr))
-			pagedir_set_accessed(t->pagedir, fe->uaddr, false);
+		if(t->pagedir != NULL)
+		{
+		if(pagedir_is_accessed(t->pagedir, fe->spe->uaddr))
+			pagedir_set_accessed(t->pagedir, fe->spe->uaddr, false);
 		else
 		{
-			struct sup_page_elem* spe = get_page_elem(fe->uaddr);
-			if(pagedir_is_dirty(t->pagedir, fe->uaddr) || spe->reswap)
+//			struct sup_page_elem* spe = get_page_elem(fe->uaddr);
+			lock_acquire(fe->spe->lock);
+			if(pagedir_is_dirty(t->pagedir, fe->spe->uaddr) || fe->spe->reswap)
 			{
-				if(spe->mmap)
+				if(fe->spe->mmap)
 				{
 					lock_acquire(&open_lock);
-					file_write_at(spe->file, fe->frame, spe->read_bytes, spe->offset);
+					file_write_at(fe->spe->file, fe->frame, fe->spe->read_bytes, fe->spe->offset);
 					lock_release(&open_lock);
 				}
 				else
 				{
-					spe->reswap = true;
-					spe->swap = true;
-					spe->swap_index = swap_out(fe->frame);
+					fe->spe->reswap = true;
+					fe->spe->swap = true;
+					fe->spe->swap_index = swap_out(fe->frame);
 				}
 			}
 
-			pagedir_clear_page(t->pagedir, fe->uaddr);
+			pagedir_clear_page(t->pagedir, fe->spe->uaddr);
 			palloc_free_page(fe->frame);
 			list_remove(&fe->elem);
+			fe->spe->load = false;
+			lock_release(fe->spe->lock);
 			free(fe);
-			spe->load = false;
 			return palloc_get_page(PAL_USER);
+		}
 		}
 		e = list_next(e);
 		if(e == list_end(&frame_list))
@@ -104,14 +118,15 @@ void* choose_victim()
 			e = list_begin(&frame_list);
 		}
 	}
-	PANIC("I don't have more frame");
 }
 
 
-struct frame_elem* find_frame()
+struct frame_elem* find_frame(struct sup_page_elem* spe)
 {
 	struct frame_elem* t;
-	t = list_entry(list_find(&frame_list, thread_same, (void *)thread_current()), struct frame_elem, elem);
+	lock_acquire(&frame_lock);
+	t = list_entry(list_find(&frame_list, spe_same, (void *)spe), struct frame_elem, elem);
+	lock_release(&frame_lock);
 	if(t == NULL)
 		return NULL;
 	else

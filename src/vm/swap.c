@@ -16,6 +16,7 @@ void swap_init()
 
 size_t swap_out(void* frame)
 {
+	lock_acquire(&block_lock);
 	size_t index = bitmap_scan(swap_table, 0, 1, false);
 	if(index == BITMAP_ERROR)
 		PANIC("[Warning] swap block is full.");
@@ -26,6 +27,7 @@ size_t swap_out(void* frame)
 	for(i = 0; i < 8; i++)
 		block_write(swap_block, index * 8 + i, frame + i * BLOCK_SECTOR_SIZE);
 
+	lock_release(&block_lock);
 	return index;
 
 }
