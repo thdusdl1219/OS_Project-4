@@ -36,7 +36,8 @@ destruct_func(struct hash_elem *a, void *aux UNUSED)
 	struct sup_page_elem *spe = hash_entry(a, struct sup_page_elem, elem);
 	if(spe->load)
 	{
-		frame_deallocate(pagedir_get_page(thread_current()->pagedir, spe->uaddr));
+		struct frame_elem* fe = find_frame(spe);
+		frame_deallocate(fe->frame);
 		pagedir_clear_page(thread_current()->pagedir, spe->uaddr);
 	}
 	else

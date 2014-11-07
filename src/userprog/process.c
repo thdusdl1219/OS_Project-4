@@ -32,6 +32,7 @@ static int i;
 struct semaphore sema3;
 struct lock load_lock;
 struct lock exec_lock;
+struct list frame_list;
 
 static bool
 pid_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux)
@@ -235,8 +236,20 @@ process_exit (void)
 		e = list_remove(e);
 		free(me);
 	}
-
+	
 	sup_page_destroy(&thread_current()->sup);
+
+	struct list_elem* fe;
+	for(fe = list_begin(&frame_list); fe != list_end(&frame_list);)
+	{
+		struct frame_elem* ff = list_entry(fe, struct frame_elem, elem);
+		fe = list_next(fe);
+		if(ff->cur_thread == cur)
+		{
+			frame_deallocate(ff->frame);
+		}
+	}
+
   pd = cur->pagedir;
   if (pd != NULL) 
     {

@@ -76,11 +76,11 @@ void check_string(const void* str)
 void check_buffer(void* buffer, unsigned size)
 {
 	unsigned i;
-	char* buf = (char *) buffer;
+	unsigned buf = (unsigned) buffer;
 	for(i = 0; i < size ; i++)
 	{
 		check_pointer((const void*)buf);
-		struct sup_page_elem* spe = get_page_elem(buffer);
+		struct sup_page_elem* spe = get_page_elem((void *)buf);
 		if(spe != NULL)
 			load_lazy_page(spe);
 
