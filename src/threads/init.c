@@ -36,6 +36,7 @@
 #include "devices/ide.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/cache.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -393,6 +394,7 @@ locate_block_devices (void)
 {
   locate_block_device (BLOCK_FILESYS, filesys_bdev_name);
   locate_block_device (BLOCK_SCRATCH, scratch_bdev_name);
+//	cache_init();
 #ifdef VM
   locate_block_device (BLOCK_SWAP, swap_bdev_name);
 #endif
