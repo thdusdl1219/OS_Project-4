@@ -328,7 +328,6 @@ thread_exit (void)
   ASSERT (!intr_context ());
 	int pid;
 	struct pid_elem* p;
-	struct open_elem* o;
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -338,22 +337,12 @@ thread_exit (void)
   intr_disable ();
 	pid = thread_current ()->tid;
 
-	while(!list_empty(&thread_current()->open_list))
-	{
-		o = list_entry(list_pop_front(&thread_current()->open_list), struct open_elem, elem);
-		file_close(o->open_file);
-		free(o);
-	}
-	while(!list_empty(&thread_current()->pid_list))
+		while(!list_empty(&thread_current()->pid_list))
 	{
 		p = list_entry(list_pop_front(&thread_current()->pid_list), struct pid_elem, elem);
 		free(p->lock);
 		free(p);
 	}
-	if(thread_current ()->file_name != NULL)
-		free(thread_current () -> file_name);
-	file_close(thread_current ()->file);
-	
 	p = list_entry(list_find(&thread_current()->parents->pid_list, ppid_same, (void *)pid), struct pid_elem, elem);
 	if(p != NULL)
 	{

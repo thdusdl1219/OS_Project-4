@@ -219,7 +219,20 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-	printf("%s: exit(%d)\n", cur->file_name, cur->exit_status);
+	struct open_elem* o;
+printf("%s: exit(%d)\n", cur->file_name, cur->exit_status);
+	while(!list_empty(&thread_current()->open_list))
+	{
+		o = list_entry(list_pop_front(&thread_current()->open_list), struct open_elem, elem);
+		file_close(o->open_file);
+		free(o);
+	}
+
+	if(thread_current ()->file_name != NULL)
+		free(thread_current () -> file_name);
+	file_close(thread_current ()->file);
+
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
