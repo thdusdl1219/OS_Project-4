@@ -100,10 +100,10 @@ thread_init (void)
   list_init (&ready_list);
 
   list_init (&all_list);
-lock_init(&load_lock);
-lock_init(&open_lock);
-lock_init(&exec_lock);
-sema_init(&sema3, 0);
+	lock_init(&load_lock);
+	lock_init(&open_lock);
+	lock_init(&exec_lock);
+	sema_init(&sema3, 0);
 //	list_init (&open_exe);
 
   /* Set up a thread structure for the running thread. */
@@ -111,6 +111,8 @@ sema_init(&sema3, 0);
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+	initial_thread->pwd = NULL;
+//	initial_thread->pwd = dir_open_root ();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -222,6 +224,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 	t->parents = thread_current ();
+	if(thread_current()->pwd != NULL)
+		t->pwd = dir_reopen(thread_current()->pwd);
+	else
+		t->pwd = NULL;
 /*	struct lock lock;
 	struct pid_elem* p;
 	lock_init(&lock);

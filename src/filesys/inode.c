@@ -1,5 +1,4 @@
 #include "filesys/inode.h"
-#include <list.h>
 #include <debug.h>
 #include <round.h>
 #include <string.h>
@@ -8,6 +7,8 @@
 #include "threads/malloc.h"
 #include "cache.h"
 #include <stdio.h>
+#include "filesys/directory.h"
+
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 #define FILE_MAX_SIZE 8466432
@@ -24,18 +25,6 @@ struct double_indirect_block
 	block_sector_t indirect_block[128];
 };
 
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk
-  {
-    off_t length;                       /* File size in bytes. */
-    unsigned magic;                     /* Magic number. */
-		block_sector_t block_ptr[14];
-		int index;
-		int indirect_index;
-		int double_indirect_index;
-    uint32_t unused[109];               /* Not used. */
-  };
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -45,22 +34,6 @@ bytes_to_sectors (off_t size)
   	return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
-struct inode 
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data;             /* Inode content. */
-		off_t length;
-		off_t read_l;
-		block_sector_t block_ptr[14];
-		int index;
-		int indirect_index;
-		int double_indirect_index;
-  };
 
 off_t inode_extend(struct inode* inode, off_t length);
 bool inode_made(struct inode_disk* disk_inode);
@@ -80,15 +53,15 @@ byte_to_sector (const struct inode *inode, off_t size, off_t pos)
     	return inode->block_ptr[pos / 512];
 		else if(pos < 512*128 + 512*12)
 		{
-			struct indirect_block block;
+			static struct indirect_block block;
 			pos -= 512*12;
 			block_read(fs_device, inode->block_ptr[12], &block);
 			return block.direct_block[pos / 512];			
 		}
 		else
 		{
-			struct double_indirect_block d_block;
-			struct indirect_block block;
+			static struct double_indirect_block d_block;
+			static struct indirect_block block;
 			pos -= (512*128 + 512*12);
 			block_read(fs_device, inode->block_ptr[13], &d_block);
 			int index = pos / (512*128);
@@ -118,7 +91,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -136,6 +109,8 @@ inode_create (block_sector_t sector, off_t length)
 			if(length > FILE_MAX_SIZE)
 				disk_inode->length = FILE_MAX_SIZE;
       disk_inode->magic = INODE_MAGIC;
+			disk_inode->dir = dir;
+
 			if(inode_made(disk_inode))
 			{
 				block_write(fs_device, sector, disk_inode);
@@ -278,6 +253,8 @@ inode_open (block_sector_t sector)
 	inode->index = inode->data.index;
 	inode->indirect_index = inode->data.indirect_index;
 	inode->double_indirect_index = inode->data.double_indirect_index;
+	inode->dir = inode->data.dir;
+	inode->up_dir = inode->data.up_dir;
 	int i;
 	for(i = 0; i < 14; i ++)
 	{
@@ -335,6 +312,8 @@ inode_close (struct inode *inode)
 				disk_inode.index = inode->index;
 				disk_inode.indirect_index = inode->indirect_index;
 				disk_inode.double_indirect_index = inode->double_indirect_index;
+				disk_inode.dir = inode->dir;
+				disk_inode.up_dir = inode->up_dir;
 				int i;
 				for(i = 0; i < 14 ; i++ )
 					disk_inode.block_ptr[i] = inode->block_ptr[i];
@@ -411,12 +390,15 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
-	
+
+	if(inode->read_l <= offset)
+		return 0;
 
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, inode->read_l, offset);
+
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */

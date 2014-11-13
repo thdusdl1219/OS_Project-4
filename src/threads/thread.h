@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "filesys/filesys.h"
 #include "userprog/syscall.h"
+#include "filesys/directory.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -106,6 +107,7 @@ struct thread
 		char* file_name;
 		struct thread* parents;
 		struct file* file;
+		struct dir* pwd;
   };
 struct open_elem
 	{

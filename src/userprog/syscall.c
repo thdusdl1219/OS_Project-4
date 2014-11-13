@@ -72,7 +72,7 @@ syscall_handler (struct intr_frame *f)
 			else
 			{
 				lock_acquire(&open_lock);
-				bool_ = filesys_create(*(char **)(f->esp + 16), *(unsigned int*)(f->esp + 20));
+				bool_ = filesys_create(*(char **)(f->esp + 16), *(unsigned int*)(f->esp + 20), false);
 				lock_release(&open_lock);
 				f->eax = bool_;
 			}
@@ -92,6 +92,11 @@ syscall_handler (struct intr_frame *f)
 			{
 				thread_current () -> exit_status = -1;
 				thread_exit();
+			}
+			if(strlen(*(char **)(f->esp + 4)) == 0)
+			{
+				f->eax = -1;
+				break;
 			}
 			lock_acquire(&open_lock);
 			open_file = filesys_open(*(char **)(f->esp + 4));

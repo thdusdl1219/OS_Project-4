@@ -1,18 +1,10 @@
 #include "filesys/directory.h"
-#include <stdio.h>
-#include <string.h>
 #include <list.h>
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
-/* A directory. */
-struct dir 
-  {
-    struct inode *inode;                /* Backing store. */
-    off_t pos;                          /* Current position. */
-  };
-
+#include <stdio.h>
+#include <string.h>
 /* A single directory entry. */
 struct dir_entry 
   {
@@ -26,7 +18,7 @@ struct dir_entry
 bool
 dir_create (block_sector_t sector, size_t entry_cnt)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  return inode_create (sector, entry_cnt * sizeof (struct dir_entry), true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -155,6 +147,10 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
     goto done;
+
+	struct inode* inode = inode_open(inode_sector);
+	inode->up_dir = dir_reopen(dir);
+	inode_close(inode);
 
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
