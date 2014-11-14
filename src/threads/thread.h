@@ -113,6 +113,8 @@ struct open_elem
 	{
 		struct list_elem elem;
 		struct file* open_file;
+		struct dir* dir;
+		bool ddir;
 		int file_d;
 	};
 struct pid_elem

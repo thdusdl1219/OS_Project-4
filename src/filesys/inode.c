@@ -8,7 +8,7 @@
 #include "cache.h"
 #include <stdio.h>
 #include "filesys/directory.h"
-
+#include "threads/thread.h"
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 #define FILE_MAX_SIZE 8466432
@@ -110,6 +110,8 @@ inode_create (block_sector_t sector, off_t length, bool dir)
 				disk_inode->length = FILE_MAX_SIZE;
       disk_inode->magic = INODE_MAGIC;
 			disk_inode->dir = dir;
+			if(dir)
+				disk_inode->up_dir = thread_current()->pwd;
 
 			if(inode_made(disk_inode))
 			{
@@ -390,7 +392,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
-
+	inode->read_l = inode->length;
 	if(inode->read_l <= offset)
 		return 0;
 

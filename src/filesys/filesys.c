@@ -33,7 +33,6 @@ filesys_init (bool format)
 //	thread_current() ->pwd = dir_open_root ();
 }
 
-struct dir* get_real_dir(const char* name);
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
 void
@@ -52,11 +51,12 @@ filesys_create (const char *name, off_t initial_size, bool ddir)
 {
   block_sector_t inode_sector = 0;
 //	struct dir *dir = dir_open_root();
-  struct dir *dir = get_real_dir (name);
+  struct dir *dir = get_real_dir (name, true);
 	char n[strlen(name) + 1];
 	memset (n, 0, strlen(name) + 1);
 	memcpy (n, name, strlen(name));
-	char *token, *save_ptr, *real_name = NULL;
+	char *token, *save_ptr;
+	char *real_name = NULL;
 	for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
 			real_name = token;
 	char* real_file_name = malloc(strlen(real_name) + 1);
@@ -73,16 +73,21 @@ filesys_create (const char *name, off_t initial_size, bool ddir)
   return success;
 }
 
-struct dir* get_real_dir(const char* name)
+struct dir* get_real_dir(const char* name, bool open)
 {
 	char n[strlen(name) + 1];
 	memset (n, 0, strlen(name) + 1);
 	memcpy (n, name, strlen(name));
 	struct dir* dir;
-	if(!strcmp(n, "/") || thread_current()->pwd == NULL)
+	if(n[0] == '/' || thread_current()->pwd == NULL)
 		dir = dir_open_root ();
 	else
-		dir = dir_reopen(thread_current()->pwd);
+	{
+		if(!thread_current()->pwd->inode->removed)
+			dir = dir_reopen(thread_current()->pwd);
+		else
+			return NULL;
+	}
 
 	char *token, *save_ptr;
 	for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
@@ -96,6 +101,8 @@ struct dir* get_real_dir(const char* name)
 		else
 		{
 			struct inode* in;
+			if(save_ptr[0] == '\0' && open)
+				return dir;
 			if(dir_lookup(dir, token, &in))
 			{
 				if(in->dir)
@@ -122,20 +129,25 @@ struct file *
 filesys_open (const char *name)
 {
 //  struct dir *dir = dir_open_root ();
-  struct dir *dir = get_real_dir (name);
+  struct dir *dir = get_real_dir (name, true);
   struct inode *inode = NULL;
 	char n[strlen(name) + 1];
 	memset (n, 0, strlen(name) + 1);
 	memcpy (n, name, strlen(name));
-	char *token, *save_ptr, *real_name = NULL;
+	char *token, *save_ptr;
+	char *real_name = (char *)name;
 	for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
 			real_name = token;
 	char* real_file_name = malloc(strlen(real_name) + 1);
 	memcpy(real_file_name, real_name, strlen(real_name) + 1);
 
+	if(!strcmp(name, "/"))
+		return file_open (dir->inode);
+
   if (dir != NULL)
     dir_lookup (dir, real_file_name, &inode);
   dir_close (dir);
+
 
   return file_open (inode);
 }
@@ -148,7 +160,7 @@ bool
 filesys_remove (const char *name) 
 {
 //  struct dir *dir = dir_open_root ();
-  struct dir *dir = get_real_dir (name);
+  struct dir *dir = get_real_dir (name, true);
 	char n[strlen(name) + 1];
 	memset (n, 0, strlen(name) + 1);
 	memcpy (n, name, strlen(name));

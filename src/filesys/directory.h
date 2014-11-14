@@ -21,6 +21,7 @@ struct dir *dir_reopen (struct dir *);
 void dir_close (struct dir *);
 struct inode *dir_get_inode (struct dir *);
 
+bool dir_empty(struct inode* inode);
 /* Reading and writing. */
 bool dir_lookup (const struct dir *, const char *name, struct inode **);
 bool dir_add (struct dir *, const char *name, block_sector_t);

@@ -12,6 +12,9 @@
 #include "threads/vaddr.h"
 #include "devices/input.h"
 #include "threads/synch.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
+
 static void syscall_handler (struct intr_frame *);
 static bool fd_same (const struct list_elem *a_, const struct list_elem *b_ UNUSED, void *aux);
 
@@ -83,6 +86,7 @@ syscall_handler (struct intr_frame *f)
 				thread_current ()->exit_status = -1;
 				thread_exit();
 			}
+				
 				lock_acquire(&open_lock);
 				f->eax = filesys_remove(*(char **)(f->esp + 4));
 				lock_release(&open_lock);
@@ -102,10 +106,22 @@ syscall_handler (struct intr_frame *f)
 			open_file = filesys_open(*(char **)(f->esp + 4));
 			lock_release(&open_lock);
 			if(open_file == NULL)
+			{
 				f->eax = -1;
+				break;
+			}
 			else
 			{
+
 				t = malloc (sizeof(*t));
+				memset(t, 0, sizeof(*t));
+				if(open_file->inode->dir)
+				{
+					t->dir = dir_open(open_file->inode);
+					t->ddir = true;
+				}
+				else
+					t->ddir = false;
 				t->open_file = open_file;
 				t->file_d = fd_;
 				f->eax = fd_++;
@@ -147,6 +163,11 @@ syscall_handler (struct intr_frame *f)
 			else
 			{
 				t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 20)), struct open_elem, elem);
+				if(t->ddir)
+				{
+					f->eax = -1;
+					break;
+				}
 				lock_acquire(&open_lock);
 				f->eax = file_write (t->open_file, *(void **)(f->esp + 24), *(int32_t *)(f->esp + 28));
 				lock_release(&open_lock);
@@ -164,7 +185,7 @@ syscall_handler (struct intr_frame *f)
 			lock_release(&open_lock);
 			break;
 		case SYS_TELL:
-			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 16)), struct open_elem, elem);
+			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 4)), struct open_elem, elem);
 			if(t == NULL)
 			{
 				thread_current ()->exit_status = -1;
@@ -181,12 +202,173 @@ syscall_handler (struct intr_frame *f)
 				thread_current ()-> exit_status = -1;
 				thread_exit();
 			}
+			if(t->ddir)
+				dir_close(t->dir);
+
 			lock_acquire(&open_lock);
 			file_close(t->open_file);
 			lock_release(&open_lock);
 			list_remove(list_find(&thread_current()->open_list, fd_same, (f->esp + 4)));
 			free(t);
 			break;
+		case SYS_CHDIR:
+			if(*(char **)(f->esp + 4) == NULL)
+			{
+				thread_current () -> exit_status = -1;
+				thread_exit();
+			}
+			if(strlen(*(char **)(f->esp + 4)) == 0)
+			{
+				f->eax = false;
+				break;
+			}
+				struct dir* dir1;
+				dir1 = get_real_dir(*(char **)(f->esp + 4),false);
+				if(dir1 == NULL)
+				{
+					f->eax = false;
+					break;
+				}
+				else
+				{
+					dir1->inode->up_dir = thread_current()->pwd;
+					if(thread_current()->pwd == NULL)
+						dir1->inode->up_dir = dir_open_root ();
+					thread_current()->pwd = dir1;
+					f->eax = true;
+				}
+			break;
+		case SYS_MKDIR:
+			if(*(char **)(f->esp + 4) == NULL)
+			{
+				thread_current () -> exit_status = -1;
+				thread_exit();
+			}
+			if(strlen(*(char **)(f->esp + 4)) == 0)
+			{
+				f->eax = false;
+				break;
+			}
+			else
+			{
+			char n[strlen(*(char**)(f->esp+4))+1];
+			char m[strlen(*(char**)(f->esp+4))+1];
+			memset (n, 0, strlen(*(char**)(f->esp + 4)) +1);
+			memset (m, 0, strlen(*(char**)(f->esp + 4)) + 1);
+			strlcpy (n, *(char **)(f->esp + 4), strlen(*(char**)(f->esp +4))+1);
+			strlcpy (m, *(char **)(f->esp + 4), strlen(*(char **)(f->esp + 4))+1);
+
+			struct dir* dir = thread_current()->pwd;
+
+			if(n[0] == '/' || dir == NULL)
+				dir = dir_open_root ();
+
+			char *token, *save_ptr, *real_name = NULL;
+
+			for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
+					real_name = token;
+			
+
+			for(token = strtok_r(m, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
+			{
+				if(!strcmp(token, "."))
+					continue;
+				else if(!strcmp(token, ".."))
+					dir = dir_reopen(dir->inode->up_dir);
+				else
+				{
+					struct inode* in;
+//					char tmp[strlen(token)+1];
+//					memset(tmp, 0, strlen(token)+1);
+//					strlcpy(tmp, token, strlen(token)+1);
+					if(save_ptr[0] == '\0')
+					{
+						if(dir_lookup(dir, real_name, &in))
+						{
+							f->eax = false;
+							break;
+						}
+						else
+						{
+							lock_acquire(&open_lock);
+							f->eax = filesys_create (*(char**)(f->esp + 4), 0, true);
+							lock_release(&open_lock);
+							break;
+						}
+					}
+					else
+					{
+						if(dir_lookup(dir, token, &in))
+						{
+							if(in->dir)
+							{
+								dir_close(dir);
+								dir = dir_open(in);
+							}
+							else
+							{
+								f->eax = false;
+								break;
+							}
+						}
+						else
+						{
+							f->eax = false;
+							break;
+						}
+					}
+				}
+			}
+			}
+			break;
+		case SYS_READDIR:
+			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 16)), struct open_elem, elem);
+			if(t == NULL)
+			{
+				thread_current ()->exit_status = -1;
+				thread_exit ();
+			}
+			if(!t->ddir)
+			{
+				f->eax = false;
+				break;
+			}
+			else
+				f->eax = dir_readdir( t->dir, *(char **)(f->esp + 20));
+		break;
+	case SYS_ISDIR:
+			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 4)), struct open_elem, elem);
+			if(t == NULL)
+			{
+				thread_current ()->exit_status = -1;
+				thread_exit ();
+			}
+			if(!t->ddir)
+			{
+				f->eax = false;
+				break;
+			}
+			else
+				f->eax = true;
+		break;
+	case SYS_INUMBER:
+			t = list_entry(list_find(&thread_current()->open_list, fd_same, (f->esp + 4)), struct open_elem, elem);
+			if(t == NULL)
+			{
+				thread_current ()->exit_status = -1;
+				thread_exit ();
+			}
+			if(!t->ddir)
+			{
+				f->eax = inode_get_inumber(t->open_file->inode);
+				break;
+			}
+			else
+			{
+				f->eax = inode_get_inumber(t->dir->inode);
+				break;
+			}
+		break;
 //		default:
 //			printf ("system call!\n");
 //			break;
