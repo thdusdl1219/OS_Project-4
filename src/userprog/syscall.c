@@ -231,9 +231,9 @@ syscall_handler (struct intr_frame *f)
 				}
 				else
 				{
-					dir1->inode->up_dir = thread_current()->pwd;
-					if(thread_current()->pwd == NULL)
-						dir1->inode->up_dir = dir_open_root ();
+//					dir1->inode->up_dir = thread_current()->pwd;
+//					if(thread_current()->pwd == NULL)
+//						dir1->inode->up_dir = dir_open_root ();
 					thread_current()->pwd = dir1;
 					f->eax = true;
 				}

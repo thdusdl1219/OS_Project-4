@@ -109,11 +109,17 @@ struct dir* get_real_dir(const char* name, bool open)
 				{
 					dir_close(dir);
 					dir = dir_open(in);
+					if(dir->inode->removed)
+						return NULL;
 				}
 				else
 				{
 					inode_close(in);
 				}
+			}
+			else if(!open)
+			{
+				return NULL;
 			}
 		}
 	}
@@ -141,7 +147,12 @@ filesys_open (const char *name)
 	char* real_file_name = malloc(strlen(real_name) + 1);
 	memcpy(real_file_name, real_name, strlen(real_name) + 1);
 
+	if(dir == NULL)
+		return NULL;
 	if(!strcmp(name, "/"))
+		return file_open (dir->inode);
+
+	if(!strcmp(name, "."))
 		return file_open (dir->inode);
 
   if (dir != NULL)
@@ -164,6 +175,8 @@ filesys_remove (const char *name)
 	char n[strlen(name) + 1];
 	memset (n, 0, strlen(name) + 1);
 	memcpy (n, name, strlen(name));
+	if(!strcmp(name, "/"))
+		return false;
 	char *token, *save_ptr, *real_name = NULL;
 	for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
 			real_name = token;
