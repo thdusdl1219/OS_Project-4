@@ -30,7 +30,7 @@ struct inode_disk
 		int indirect_index;
 		int double_indirect_index;
 		bool dir;
-		struct dir* up_dir;
+		block_sector_t up_dir;
     uint32_t unused[107];               /* Not used. */
   };
 
@@ -51,7 +51,7 @@ struct inode
 		int indirect_index;
 		int double_indirect_index;
 		bool dir;
-		struct dir* up_dir;
+		block_sector_t up_dir;
   };
 
 #endif /* filesys/inode.h */

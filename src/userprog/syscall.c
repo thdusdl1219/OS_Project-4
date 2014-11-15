@@ -234,6 +234,8 @@ syscall_handler (struct intr_frame *f)
 //					dir1->inode->up_dir = thread_current()->pwd;
 //					if(thread_current()->pwd == NULL)
 //						dir1->inode->up_dir = dir_open_root ();
+					if(thread_current()->pwd != NULL)
+						dir_close(thread_current()->pwd);
 					thread_current()->pwd = dir1;
 					f->eax = true;
 				}
@@ -258,11 +260,12 @@ syscall_handler (struct intr_frame *f)
 			strlcpy (n, *(char **)(f->esp + 4), strlen(*(char**)(f->esp +4))+1);
 			strlcpy (m, *(char **)(f->esp + 4), strlen(*(char **)(f->esp + 4))+1);
 
-			struct dir* dir = thread_current()->pwd;
+			struct dir* dir;
 
 			if(n[0] == '/' || dir == NULL)
 				dir = dir_open_root ();
-
+			else
+				dir = dir_reopen(thread_current()->pwd);
 			char *token, *save_ptr, *real_name = NULL;
 
 			for(token = strtok_r(n, "/", &save_ptr); token != NULL; token = strtok_r(NULL, "/", &save_ptr))
@@ -274,7 +277,7 @@ syscall_handler (struct intr_frame *f)
 				if(!strcmp(token, "."))
 					continue;
 				else if(!strcmp(token, ".."))
-					dir = dir_reopen(dir->inode->up_dir);
+					dir = dir_open(inode_open(dir->inode->up_dir));
 				else
 				{
 					struct inode* in;
@@ -286,6 +289,7 @@ syscall_handler (struct intr_frame *f)
 						if(dir_lookup(dir, real_name, &in))
 						{
 							f->eax = false;
+//							dir_close(dir);
 							break;
 						}
 						else
@@ -293,6 +297,8 @@ syscall_handler (struct intr_frame *f)
 							lock_acquire(&open_lock);
 							f->eax = filesys_create (*(char**)(f->esp + 4), 0, true);
 							lock_release(&open_lock);
+//							if(dir != thread_current()->pwd)
+							dir_close(dir);
 							break;
 						}
 					}
@@ -308,12 +314,14 @@ syscall_handler (struct intr_frame *f)
 							else
 							{
 								f->eax = false;
+//								dir_close(dir);
 								break;
 							}
 						}
 						else
 						{
 							f->eax = false;
+	//						dir_close(dir);
 							break;
 						}
 					}

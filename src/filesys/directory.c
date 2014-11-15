@@ -149,7 +149,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
     goto done;
 
 	struct inode* inode = inode_open(inode_sector);
-	inode->up_dir = dir_reopen(dir);
+	inode->up_dir = dir->inode->sector;
+//	inode_close(dir->inode); // point
 	inode_close(inode);
 
   /* Set OFS to offset of free slot.

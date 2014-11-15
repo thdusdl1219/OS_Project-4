@@ -96,7 +96,7 @@ struct dir* get_real_dir(const char* name, bool open)
 			continue;
 		else if(!strcmp(token, ".."))
 		{
-			dir = dir_reopen(dir->inode->up_dir); 
+			dir = dir_open(inode_open(dir->inode->up_dir)); 
 		}
 		else
 		{
@@ -150,10 +150,10 @@ filesys_open (const char *name)
 	if(dir == NULL)
 		return NULL;
 	if(!strcmp(name, "/"))
-		return file_open (dir->inode);
+		return file_open (inode_reopen(dir->inode));
 
 	if(!strcmp(name, "."))
-		return file_open (dir->inode);
+		return file_open (inode_reopen(dir->inode));
 
   if (dir != NULL)
     dir_lookup (dir, real_file_name, &inode);

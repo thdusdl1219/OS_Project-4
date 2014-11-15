@@ -111,7 +111,12 @@ inode_create (block_sector_t sector, off_t length, bool dir)
       disk_inode->magic = INODE_MAGIC;
 			disk_inode->dir = dir;
 			if(dir)
-				disk_inode->up_dir = thread_current()->pwd;
+			{
+				if(thread_current()->pwd == NULL)
+					disk_inode->up_dir = ROOT_DIR_SECTOR;
+				else
+					disk_inode->up_dir = thread_current()->pwd->inode->sector;
+			}
 
 			if(inode_made(disk_inode))
 			{
@@ -291,7 +296,6 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
-
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
@@ -319,6 +323,9 @@ inode_close (struct inode *inode)
 				int i;
 				for(i = 0; i < 14 ; i++ )
 					disk_inode.block_ptr[i] = inode->block_ptr[i];
+//				if (inode->up_dir != NULL)
+//					dir_close(inode->up_dir);
+
 				block_write(fs_device, inode->sector, &disk_inode);
 			}
 

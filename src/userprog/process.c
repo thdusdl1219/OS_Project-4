@@ -227,7 +227,7 @@ printf("%s: exit(%d)\n", cur->file_name, cur->exit_status);
 		file_close(o->open_file);
 		free(o);
 	}
-
+	dir_close(thread_current()->pwd);
 	if(thread_current ()->file_name != NULL)
 		free(thread_current () -> file_name);
 	file_close(thread_current ()->file);
