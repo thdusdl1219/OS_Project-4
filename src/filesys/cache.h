@@ -3,9 +3,11 @@
 
 #include "devices/block.h"
 #include "filesys.h"
+#include "threads/synch.h"
 #include <list.h>
 
 struct list buffer_cache;
+struct lock cache_lock;
 int cache_size;
 
 struct cache_elem

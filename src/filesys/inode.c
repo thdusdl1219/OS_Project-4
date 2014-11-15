@@ -151,7 +151,8 @@ bool inode_made(struct inode_disk* disk_inode)
 off_t inode_extend(struct inode* inode, off_t length)
 {
 	static char zeros[BLOCK_SECTOR_SIZE];
-	size_t sectors = bytes_to_sectors(length);
+//	size_t sectors = bytes_to_sectors(length);
+	size_t sectors = bytes_to_sectors(length) - bytes_to_sectors(inode->length);
 	if(sectors == 0)
 		return length;
 	while(inode->index < 12)
@@ -165,7 +166,10 @@ off_t inode_extend(struct inode* inode, off_t length)
 	}
 	if(inode->index == 12)
 	{
-		struct indirect_block block;
+		static struct indirect_block block;
+		int j;
+		for(j = 0; j < 128 ; j++)
+			block.direct_block[j] = 0;
 		if(inode->indirect_index == 0)
 			free_map_allocate(1, &inode->block_ptr[12]);
 		else
@@ -185,10 +189,15 @@ off_t inode_extend(struct inode* inode, off_t length)
 			inode->index = 13;
 			inode->indirect_index = 0;
 		}
+		if(sectors == 0)
+			return length;
 	}
 	if(inode->index == 13)
 	{
+		int i;
 		static struct double_indirect_block double_block;
+		for(i = 0; i < 128; i++)
+			double_block.indirect_block[i] = 0;
 		if(inode->double_indirect_index == 0 && inode->indirect_index == 0)
 			free_map_allocate(1, &inode->block_ptr[13]);
 		else
@@ -196,6 +205,8 @@ off_t inode_extend(struct inode* inode, off_t length)
 		while(inode->double_indirect_index < 128)
 		{
 			static struct indirect_block indirect_block;
+			for(i = 0; i < 128; i++)
+				indirect_block.direct_block[i] = 0;
 			if(inode->indirect_index == 0)
 				free_map_allocate(1, &double_block.indirect_block[inode->double_indirect_index]);
 			else
@@ -254,6 +265,7 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+	lock_init(&inode->lock);
   block_read (fs_device, inode->sector, &inode->data);
 	inode->length = inode->data.length;
 	inode->read_l = inode->data.length;
@@ -449,7 +461,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     return 0;
 
 	if(offset + size > inode->length)
+	{
+		if(!inode->dir)
+			lock_acquire(&inode->lock);
 		inode->length = inode_extend(inode, offset + size);
+		if(!inode->dir)
+			lock_release(&inode->lock);
+	}
 
   while (size > 0) 
     {

@@ -6,6 +6,7 @@ void cache_init()
 {
 	list_init(&buffer_cache);
 	cache_size = 0;
+	lock_init(&cache_lock);
 }
 
 struct cache_elem* get_elem_cache(block_sector_t sector)
@@ -45,6 +46,7 @@ uint8_t* choose_victim(block_sector_t sector, bool dirty, bool read)
 	ce->sector_index = sector;
 	ce->accessed = true;
 	ce->dirty = dirty;
+	lock_release(&cache_lock);
 	if(read)
 		get_block_cache(sector + 1, dirty, false);
 	return (uint8_t *)&ce->block;
@@ -52,11 +54,13 @@ uint8_t* choose_victim(block_sector_t sector, bool dirty, bool read)
 
 uint8_t* get_block_cache(block_sector_t sector, bool dirty, bool read)
 {
+	lock_acquire(&cache_lock);
 	struct cache_elem* ce = get_elem_cache(sector);
 	if(ce != NULL)
 	{
 		ce->accessed = true;
 		ce->dirty |= dirty;
+		lock_release(&cache_lock);
 		if(read)
 			get_block_cache(sector + 1, dirty, false);
 		return (uint8_t *)&ce->block;
@@ -74,8 +78,10 @@ uint8_t* get_block_cache(block_sector_t sector, bool dirty, bool read)
 			ce->sector_index = sector;
 			ce->accessed = true;
 			ce->dirty = dirty;
+			lock_release(&cache_lock);
 			if(read)
 				get_block_cache(sector + 1, dirty, false);
+
 			return (uint8_t *)&ce->block;
 		}
 		else
@@ -85,6 +91,7 @@ uint8_t* get_block_cache(block_sector_t sector, bool dirty, bool read)
 
 void all_cache_go_back()
 {
+	lock_acquire(&cache_lock);
 	struct list_elem* e;
 	for(e = list_begin(&buffer_cache); e != list_end(&buffer_cache);)
 	{
@@ -95,4 +102,5 @@ void all_cache_go_back()
 		list_remove(&ce->elem);
 		free(ce);
 	}
+	lock_release(&cache_lock);
 }

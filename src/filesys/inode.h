@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
+#include "threads/synch.h"
 #include <list.h>
 struct bitmap;
 
@@ -52,6 +53,7 @@ struct inode
 		int double_indirect_index;
 		bool dir;
 		block_sector_t up_dir;
+		struct lock lock;
   };
 
 #endif /* filesys/inode.h */
